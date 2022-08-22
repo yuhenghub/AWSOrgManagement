@@ -1,4 +1,5 @@
-##Sample of tracking Leave Org Events
+## Sample of tracking Leave Org Events
+
 **Introduction**
 When using AWS Organization, "Leave Organization" Event cannot be tracked from managment account, in order to implement this function and addionally add notification when such event occurs. Besides the "Leave Organization" Event, other event cannot be auto-tracked by cloudtrail and cloudwatch, you can try the this solution to implement the monitor and alerts. 
 **Pre-Requests:**
