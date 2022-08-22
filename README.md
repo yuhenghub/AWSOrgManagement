@@ -1,9 +1,12 @@
-## Sample of tracking Leave Org Events
+## Organization Managment: Auto-monitoring Member Account
 
 **Introduction**
-When using AWS Organization, "Leave Organization" Event cannot be tracked from managment account, in order to implement this, this sample  function and addionally add notification when such event occurs. Besides the "Leave Organization" Event, other event cannot be auto-tracked by cloudtrail and cloudwatch, you can try the this solution to implement the monitor and alerts. 
+
+When using AWS Organization, monitoring member account status from management account especially the link between with management account is hard by using exsiting cloud monitoring components like cloudtrail and cloudwatch. In order to implement member account monitoring automation, we created following pattern to implement the auto monitoring and send notification when such event occurs. In this example,we are monitoring the "Leave Organization" Event. For other event cannot be auto-tracked by cloudtrail and cloudwatch, you can use this pattern to implement the monitoring and alerts. 
+
 **Pre-Requests:**
-1. Create Lambda Funtion, named "leaveOrgAlert"
+
+1. Create Lambda Funtion
 2. Create a json file ("record.json") in S3
 3. Set Up SNS for notification
 4. Set up EventBridge to trigger lambda hourly
@@ -13,6 +16,7 @@ When using AWS Organization, "Leave Organization" Event cannot be tracked from m
 - SNS: add AmazonSNSFullAccess permission
 
 **Implementation**
+
 Upload the code in lambda_funtion.py to leaveOrgAlert function code. and run a test once with 2 function-parameters.
 - logs_bucket (bucket where you put the record.json)
 - SNS_ARN (the arn for your SNS in pre-request)
