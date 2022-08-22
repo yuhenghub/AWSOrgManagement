@@ -11,9 +11,9 @@ When using AWS Organization, monitoring member account status from management ac
 3. Set Up SNS for notification
 4. Set up EventBridge to trigger lambda hourly
 5. Set Up Role for lambda with
-- S3: Write and Read access to the Json file in step 2
-- Organizations:add AWSOrganizationsReadOnlyAccess permission
-- SNS: add AmazonSNSFullAccess permission
+    - S3: Write and Read access to the Json file in step 2
+    - Organizations:add AWSOrganizationsReadOnlyAccess permission
+    - SNS: add AmazonSNSFullAccess permission
 
 **Implementation**
 
