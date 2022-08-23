@@ -6,11 +6,11 @@ When using AWS Organization, monitoring member account status from management ac
 
 **Pre-Requests:**
 
-1. Create Lambda Funtion
+1. Create lambda funtion
 2. Create a json file ("record.json") in S3
-3. Set Up SNS for notification
+3. Set up SNS for notification
 4. Set up EventBridge to trigger lambda hourly
-5. Set Up Role for lambda with
+5. Set up Role for lambda with following persiminsions
     - S3: Write and Read access to the Json file in step 2
     - Organizations:add AWSOrganizationsReadOnlyAccess permission
     - SNS: add AmazonSNSFullAccess permission
