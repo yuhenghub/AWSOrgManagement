@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ''
+Parameters:
+  recordBucketName:
+    Type: String
+    Description: The Name of the s3 where the record is saved
+    AllowedPattern: ^[a-z0-9]+[a-z0-9-]{3,63}[a-z0-9]+$
+    MinLength: 1
+  snsEmailAddress:
+    Type: String
+    Description: Email address that receives SNS alarms
+    MinLength: 1
+  secondaryEmailAddresses :
+    Type: String
+    Description: Secondary email addresses for receiving SNS alarms
+    MinLength: 1
+Resources:
+  # 创建存放Organizations记录的s3
+  orgRecordsBucket:
+    Type: AWS::S3::Bucket
+#    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref recordBucketName
+
+  # 创建Lambda及相关角色权限
+  rConfigRulesLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+
+  rConfigRulesLambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: configrules
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: '*'
+            Resource: '*'
+      Roles:
+        - !Ref rConfigRulesLambdaRole
+
+  # 创建Lambda函数
+  rAMIComplianceFunction:
+    Type: AWS::Lambda::Function
+    #    Condition: cApprovedAMIsRule
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+          
+          logs_bucket = os.environ['logs_bucket']
+          record = 'record.json'
+          _TopicArn_ = os.environ['SNS_ARN']
+          _secondaryEmail_ = os.environ['secondaryEmail']
+          
+          def list_records_format():
+              client = boto3.client('organizations')
+              accounts = client.list_accounts()
+              # print(accounts['Accounts'],type(accounts['Accounts']))
+              article_info = []
+              for entity in accounts['Accounts']:
+                  # print(entity['Id'])
+                  article_info.append(entity['Id'])
+              record = json.dumps(article_info,default=str)
+              return json.loads(record)
+          
+          def list_records():
+              client = boto3.client('organizations')
+              accounts = client.list_accounts()
+              # print(accounts['Accounts'],type(accounts['Accounts']))
+              article_info = []
+              for entity in accounts['Accounts']:
+                  # print(entity['Id'])
+                  article_info.append(entity['Id'])
+              record = json.dumps(article_info,default=str)
+              return record
+          
+          def read_records():
+              client = boto3.client('s3')
+              try:
+                  result = client.get_object(Bucket=logs_bucket, Key=record)
+                  content = result['Body']
+                  jsonObject = json.loads(content.read())
+            
+                  return jsonObject
+              except Exception as e:
+                  if str(e) == 'An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist.':
+                      write_records(list_records())
+            
+                      result = client.get_object(Bucket=logs_bucket, Key=record)
+                      content = result['Body']
+                      jsonObject = json.loads(content.read())
+          
+                      # 关联SNS备用邮箱
+                      print('1111111111111',_secondaryEmail_)
+                      if len(_secondaryEmail_) != 0:
+                          # 判断是否是多个邮箱
+                          if _secondaryEmail_.find(',') > 0:
+                              print('有多个备用邮箱.......')
+                              for entity in _secondaryEmail_.split(','):
+                                  print(entity)
+                                  client = boto3.client('sns')
+                                  response = client.subscribe(
+                                      TopicArn=_TopicArn_,
+                                      Protocol='email',
+                                      Endpoint= entity
+                                  )
+                                  print(response)
+                              
+                          else:
+                              print('只有一个备用邮箱.......')
+                              client = boto3.client('sns')
+                              response = client.subscribe(
+                                  TopicArn=_TopicArn_,
+                                  Protocol='email',
+                                  Endpoint= _secondaryEmail_
+                              )
+            
+                      return jsonObject
+          
+          def write_records(new_record:json):
+              client = boto3.client('s3')
+              client.put_object(Body=new_record, Bucket=logs_bucket, Key=record)
+          
+          def sns_push_message(memberaccount):
+              client = boto3.client('sns')
+              response = client.publish(
+                  TopicArn = _TopicArn_,
+                  Message='account leaving organization. The account number is {}'.format(memberaccount),
+                  Subject='Account leaving organization. The account number is {}'.format(memberaccount)
+              )
+          
+          def lambda_handler(event, context):
+              # Begin
+              print('开始.....................')
+          
+              # print(list_records())
+              # write_records(list_records())
+              # print(read_records())
+
+              a = list_records_format()
+              b = read_records()
+          
+              # print(set(a).difference(set(b))) #差集，在list1中但不在list2中的元素)
+          
+              addValue = set(a).difference(set(b)) #差集，在a中但不在b中的元素)
+              deleteValue = set(b).difference(set(a)) #差集，在b中但不在a中的元素
+              # print(addValue,type(addValue)) #差集，在list2中但不在list1中的元素
+              if len(deleteValue) == 0 :
+                  print('no changed') # 表示新数据中没有少
+              else:
+                  # print(deleteValue)
+                  for i in list(deleteValue):
+                      print(i)
+                      # 发送邮件
+                      sns_push_message(i)
+          
+          
+              # 将新纪录写入s3
+              write_records(list_records())
+          
+              # End
+              print('结束.....................')
+
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      Timeout: 300
+      FunctionName: 'leaveOrgLambda'
+      Environment:
+        Variables:
+          logs_bucket:
+            Ref: orgRecordsBucket
+          SNS_ARN:
+            Ref: snsEmail
+          secondaryEmail:
+            Ref: secondaryEmailAddresses
+      Role:
+        !GetAtt
+        - rConfigRulesLambdaRole
+        - Arn
+
+  # 创建EventBridge定时任务，每小时触发一次Lambda
+  ScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "ScheduledRule"
+#      ScheduleExpression: "rate(1 minute)"
+      ScheduleExpression: "rate(1 day)"
+      State: "ENABLED"
+      Targets:
+        - Arn:
+            'Fn::GetAtt':
+              - rAMIComplianceFunction
+              - Arn
+          Id: Target0
+
+  # 创建Lambda的策略，允许EventBridge触发Lambda
+  LambdaPermissionAllowEventPostMsg:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName:
+        'Fn::GetAtt':
+          - rAMIComplianceFunction
+          - Arn
+      Principal: events.amazonaws.com
+      SourceArn:
+        'Fn::GetAtt':
+          - ScheduledRule
+          - Arn
+
+  # 创建SNS，发送邮件
+  snsEmail:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: 'leaveOrg-sns'
+      Subscription:
+        - Endpoint: !Ref snsEmailAddress
+          Protocol: "email"
